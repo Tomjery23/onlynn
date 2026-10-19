@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Quản lý nhà nghỉ Hoa Hồng</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="toast-wrap" aria-live="polite"></div>
+
+  <header class="app-header no-print">
+    <div class="brand">
+      <div class="logo">HH</div>
+      <div>
+        <h1 id="board-inn-name">Nhà nghỉ Hoa Hồng</h1>
+        <p class="sub"><span id="board-address"></span> <span id="board-phone"></span></p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn btn-ghost" id="btn-backup">Sao lưu JSON</button>
+      <button type="button" class="btn btn-ghost" id="btn-restore">Khôi phục</button>
+      <input type="file" id="restore-file" accept="application/json" hidden>
+      <button type="button" class="btn btn-primary" id="btn-settings">Cài đặt giá và giờ nghỉ</button>
+    </div>
+  </header>
+
+  <nav class="app-nav no-print" aria-label="Điều hướng">
+    <button type="button" class="nav-btn active" data-nav="sec-price">Bảng giá</button>
+    <button type="button" class="nav-btn" data-nav="sec-checkin">Nhận / trả phòng</button>
+    <button type="button" class="nav-btn" data-nav="sec-quick">Tính tiền nhanh</button>
+    <button type="button" class="nav-btn" data-nav="sec-rooms">Danh sách phòng</button>
+    <button type="button" class="nav-btn" data-nav="sec-history">Lịch sử</button>
+  </nav>
+
+  <main class="layout no-print">
+    <section class="stats-row" aria-label="Thống kê">
+      <article class="stat-card"><span>Doanh thu hôm nay</span><strong id="stat-revenue">0 ₫</strong></article>
+      <article class="stat-card"><span>Lượt thuê hôm nay</span><strong id="stat-stays">0</strong></article>
+      <article class="stat-card occupied"><span>Phòng đang có khách</span><strong id="stat-occupied">0</strong></article>
+      <article class="stat-card vacant"><span>Phòng trống</span><strong id="stat-vacant">0</strong></article>
+      <article class="stat-card"><span>Tổng tiền chưa thu</span><strong id="stat-unpaid">0 ₫</strong></article>
+    </section>
+
+    <section id="sec-price" class="panel">
+      <div class="panel-head">
+        <h2>Bảng giá và quy định giờ nghỉ</h2>
+        <p class="muted">Khung này cuộn độc lập. Sửa giá trong Cài đặt — hóa đơn đã thanh toán không bị đổi.</p>
+      </div>
+      <div class="price-scroll" tabindex="0">
+        <div class="price-grid">
+          <article class="price-card">
+            <h3>Nghỉ giờ</h3>
+            <p class="price-lg" id="p-hourly-first">70.000 ₫</p>
+            <p>Giờ đầu tiên</p>
+            <p>Mỗi giờ tiếp theo: <strong id="p-hourly-extra">15.000 ₫</strong></p>
+            <p>Làm tròn: <strong id="p-rounding"></strong></p>
+            <ul id="p-hourly-windows"></ul>
+          </article>
+          <article class="price-card">
+            <h3>Nghỉ qua đêm</h3>
+            <p class="price-lg" id="p-overnight">170.000 ₫</p>
+            <p>Phụ thu giờ thêm: <strong id="p-overnight-extra">15.000 ₫</strong></p>
+            <h4>Khung nhận / trả phòng</h4>
+            <ul id="p-overnight-windows"></ul>
+            <h4>Phụ thu sau giờ tiêu chuẩn</h4>
+            <ul id="p-overnight-bands"></ul>
+          </article>
+          <article class="price-card">
+            <h3>Nghỉ ngày</h3>
+            <p class="price-lg" id="p-daily">300.000 ₫</p>
+            <p>Phụ thu trả muộn: <strong id="p-daily-late">15.000 ₫</strong>/giờ</p>
+            <h4>Khung nhận / trả phòng</h4>
+            <ul id="p-daily-windows"></ul>
+          </article>
+        </div>
+        <div class="rules-note">
+          <p>Nhận phòng sau giờ chuyển gói: hệ thống cảnh báo và vẫn cho nhân viên chọn loại hình. Giờ trả phòng tiêu chuẩn luôn gồm đủ ngày và giờ; nếu giờ trả sớm hơn giờ nhận theo đồng hồ thì tự cộng sang ngày hôm sau.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="two-col">
+      <section id="sec-checkin" class="panel">
+        <div class="panel-head">
+          <h2>Thông tin khách · Nhận phòng · Thanh toán</h2>
+        </div>
+        <form id="checkin-form" class="form-grid" onsubmit="return false;">
+          <label>Số phòng
+            <select id="f-room"></select>
+          </label>
+          <label>Tên khách hàng
+            <input id="f-name" type="text" autocomplete="name" required>
+          </label>
+          <label>Số điện thoại
+            <input id="f-phone" type="tel" inputmode="tel">
+          </label>
+          <label>Loại hình thuê
+            <select id="f-type">
+              <option value="hourly">Nghỉ giờ</option>
+              <option value="overnight">Nghỉ qua đêm</option>
+              <option value="daily">Nghỉ ngày</option>
+            </select>
+          </label>
+          <label>Ngày giờ nhận phòng
+            <div class="with-btn">
+              <input id="f-checkin" type="datetime-local">
+              <button type="button" class="btn btn-ghost" id="btn-now-in">Giờ hiện tại</button>
+            </div>
+          </label>
+          <label>Giờ trả phòng dự kiến
+            <input id="f-expected" type="datetime-local">
+          </label>
+          <label>Giờ trả phòng thực tế
+            <div class="with-btn">
+              <input id="f-actual" type="datetime-local">
+              <button type="button" class="btn btn-ghost" id="btn-now-out">Giờ hiện tại</button>
+            </div>
+          </label>
+          <label>Giá phòng (tự tính)
+            <input id="f-room-price" type="text" readonly>
+          </label>
+          <label>Phụ thu thêm (nhân viên nhập)
+            <input id="f-surcharge" type="number" min="0" step="1000" value="0">
+          </label>
+          <label>Giảm giá
+            <input id="f-discount" type="number" min="0" step="1000" value="0">
+          </label>
+          <label>Tổng tiền phải thanh toán
+            <input id="f-total" type="text" readonly>
+          </label>
+          <label>Số tiền khách đã trả
+            <input id="f-paid" type="number" min="0" step="1000" value="0">
+          </label>
+          <div class="money-pills">
+            <div>Còn thiếu: <strong id="f-collect">0 ₫</strong></div>
+            <div>Tiền thừa: <strong id="f-refund">0 ₫</strong></div>
+          </div>
+          <label class="full">Ghi chú
+            <textarea id="f-notes" rows="2"></textarea>
+          </label>
+        </form>
+        <div class="action-bar">
+          <button type="button" class="btn" id="btn-calc">Tính tiền ngay</button>
+          <button type="button" class="btn btn-primary" id="btn-checkin">Nhận phòng</button>
+          <button type="button" class="btn btn-pay" id="btn-pay">Thanh toán</button>
+          <button type="button" class="btn btn-warn" id="btn-checkout-calc">Tính tiền trả phòng</button>
+          <button type="button" class="btn" id="btn-checkout">Trả phòng</button>
+          <button type="button" class="btn" id="rm-save-edit">Lưu sửa lượt thuê</button>
+          <button type="button" class="btn btn-ghost" id="btn-reset">Hủy thao tác</button>
+        </div>
+        <div id="calc-result" class="result-box"></div>
+      </section>
+
+      <section id="sec-quick" class="panel">
+        <div class="panel-head">
+          <h2>Bảng tính tiền nhanh</h2>
+          <p class="muted">Dùng chung công thức với hóa đơn. Kết quả đổi ngay khi nhập.</p>
+        </div>
+        <div class="form-grid compact">
+          <label>Loại hình
+            <select id="q-type">
+              <option value="hourly">Nghỉ giờ</option>
+              <option value="overnight">Nghỉ qua đêm</option>
+              <option value="daily">Nghỉ ngày</option>
+            </select>
+          </label>
+          <label>Phòng (tuỳ chọn)
+            <select id="q-room"></select>
+          </label>
+          <label>Giờ nhận
+            <div class="with-btn">
+              <input id="q-checkin" type="datetime-local">
+              <button type="button" class="btn btn-ghost" id="q-now-in">Hiện tại</button>
+            </div>
+          </label>
+          <label>Giờ trả
+            <div class="with-btn">
+              <input id="q-checkout" type="datetime-local">
+              <button type="button" class="btn btn-ghost" id="q-now">Lấy giờ hiện tại</button>
+            </div>
+          </label>
+          <label>Đã trả trước
+            <input id="q-paid" type="number" min="0" step="1000" value="0">
+          </label>
+          <label>Giảm giá
+            <input id="q-discount" type="number" min="0" step="1000" value="0">
+          </label>
+          <label>Phụ thu
+            <input id="q-surcharge" type="number" min="0" step="1000" value="0">
+          </label>
+        </div>
+        <div class="action-bar">
+          <button type="button" class="btn" id="q-recalc">Tính lại</button>
+          <button type="button" class="btn btn-primary" id="q-to-form">Đưa thông tin vào hóa đơn</button>
+        </div>
+        <div id="quick-result" class="result-box"></div>
+      </section>
+    </section>
+
+    <section id="sec-rooms" class="panel">
+      <div class="panel-head">
+        <h2>Danh sách phòng</h2>
+        <div class="toolbar">
+          <input id="room-search" type="search" placeholder="Tìm số phòng">
+          <select id="room-filter">
+            <option value="all">Tất cả trạng thái</option>
+            <option value="vacant">Trống</option>
+            <option value="occupied">Đang thuê</option>
+            <option value="cleaning">Chờ dọn</option>
+            <option value="inactive">Ngừng hoạt động</option>
+          </select>
+          <input id="new-room-name" type="text" placeholder="Tên phòng mới">
+          <button type="button" class="btn btn-primary" id="btn-add-room">Thêm phòng</button>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="dot vacant"></span> Trống
+        <span class="dot occupied"></span> Đang thuê
+        <span class="dot cleaning"></span> Chờ dọn
+        <span class="dot inactive"></span> Ngừng hoạt động
+      </div>
+      <div id="room-grid" class="room-grid"></div>
+    </section>
+
+    <section id="sec-history" class="panel">
+      <div class="panel-head">
+        <h2>Lịch sử thuê phòng và khách hàng</h2>
+        <div class="toolbar wrap">
+          <input id="h-guest" type="search" placeholder="Tên khách">
+          <input id="h-phone" type="search" placeholder="Số điện thoại">
+          <input id="h-room" type="search" placeholder="Số phòng">
+          <select id="h-type">
+            <option value="all">Mọi loại hình</option>
+            <option value="hourly">Nghỉ giờ</option>
+            <option value="overnight">Nghỉ qua đêm</option>
+            <option value="daily">Nghỉ ngày</option>
+          </select>
+          <select id="h-status">
+            <option value="all">Mọi thanh toán</option>
+            <option value="paid">Đã thanh toán</option>
+            <option value="unpaid">Còn thiếu</option>
+            <option value="overpaid">Thừa tiền</option>
+          </select>
+          <input id="h-from" type="date">
+          <input id="h-to" type="date">
+          <button type="button" class="btn" id="h-export">Xuất CSV (UTF-8)</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Mã</th><th>Phòng</th><th>Khách</th><th>Loại</th>
+              <th>Nhận</th><th>Trả</th><th>Thời gian</th>
+              <th>Tiền phòng</th><th>Phụ thu</th><th>Tổng</th>
+              <th>Thanh toán</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+      <div id="history-cards" class="history-cards"></div>
+      <div class="panel-head" style="margin-top:1rem">
+        <h3>Doanh thu theo ngày (tiền đã thu)</h3>
+      </div>
+      <div id="stat-byday" class="byday"></div>
+    </section>
+  </main>
+
+  <div class="modal" id="settings-modal" aria-hidden="true">
+    <div class="modal-card wide">
+      <div class="modal-head">
+        <h2>Cài đặt giá và giờ nghỉ</h2>
+        <button type="button" class="icon-btn" data-close="#settings-modal" aria-label="Đóng">×</button>
+      </div>
+      <div class="modal-body">
+        <h3>Thông tin nhà nghỉ</h3>
+        <div class="form-grid">
+          <label>Tên nhà nghỉ <input id="s-name" type="text"></label>
+          <label>Địa chỉ <input id="s-address" type="text"></label>
+          <label>Điện thoại <input id="s-phone" type="text"></label>
+          <label>Khổ hóa đơn
+            <select id="s-paper">
+              <option value="a4">A4</option>
+              <option value="narrow">Hóa đơn hẹp</option>
+            </select>
+          </label>
+        </div>
+        <h3>Nghỉ giờ</h3>
+        <div class="form-grid">
+          <label>Giá giờ đầu tiên <input id="s-first" type="number" min="0" step="1000"></label>
+          <label>Giá mỗi giờ tiếp theo <input id="s-extra" type="number" min="0" step="1000"></label>
+          <label>Quy định làm tròn giờ
+            <select id="s-round">
+              <option value="ceil">Làm tròn lên (mặc định)</option>
+              <option value="floor">Làm tròn xuống</option>
+              <option value="nearest">Làm tròn gần nhất</option>
+              <option value="none">Tính theo phút</option>
+            </select>
+          </label>
+          <label>Số giờ mặc định khi nhận nghỉ giờ <input id="s-def-hours" type="number" min="1" step="1"></label>
+        </div>
+        <h3>Nghỉ qua đêm</h3>
+        <div class="form-grid">
+          <label>Giá nghỉ qua đêm <input id="s-on-price" type="number" min="0" step="1000"></label>
+          <label>Giá mỗi giờ phụ thu qua đêm <input id="s-on-extra" type="number" min="0" step="1000"></label>
+          <label>Giờ trả phòng thay thế (ngoài khung) <input id="s-on-fallback" type="time"></label>
+          <label class="check"><input id="s-on-full" type="checkbox"> Trả sớm vẫn tính đủ gói qua đêm</label>
+        </div>
+        <div class="row-between">
+          <h4>Khung giờ nhận / trả qua đêm</h4>
+          <button type="button" class="btn btn-small" id="s-add-on-w">Thêm khung</button>
+        </div>
+        <div id="s-on-windows"></div>
+        <div class="row-between">
+          <h4>Phụ thu sau giờ tiêu chuẩn (qua đêm)</h4>
+          <button type="button" class="btn btn-small" id="s-add-on-b">Thêm mức phí</button>
+        </div>
+        <div id="s-on-bands"></div>
+        <h3>Nghỉ ngày</h3>
+        <div class="form-grid">
+          <label>Giá nghỉ ngày <input id="s-day-price" type="number" min="0" step="1000"></label>
+          <label>Phụ thu trả muộn / giờ <input id="s-day-extra" type="number" min="0" step="1000"></label>
+          <label>Giờ trả phòng thay thế <input id="s-day-fallback" type="time"></label>
+          <label class="check"><input id="s-day-full" type="checkbox"> Trả sớm vẫn tính đủ gói ngày</label>
+        </div>
+        <div class="row-between">
+          <h4>Khung giờ nhận / trả nghỉ ngày</h4>
+          <button type="button" class="btn btn-small" id="s-add-day-w">Thêm khung</button>
+        </div>
+        <div id="s-day-windows"></div>
+        <div class="row-between">
+          <h4>Mức phí phát sinh nghỉ ngày</h4>
+          <button type="button" class="btn btn-small" id="s-add-day-b">Thêm mức phí</button>
+        </div>
+        <div id="s-day-bands"></div>
+        <h3>Ngưỡng chuyển loại hình</h3>
+        <div class="form-grid">
+          <label>Từ giờ này gợi ý nghỉ qua đêm <input id="s-conv-on" type="time"></label>
+          <label>Từ giờ này gợi ý nghỉ giờ <input id="s-conv-hour" type="time"></label>
+        </div>
+        <p class="muted">Hóa đơn đã lưu giữ nguyên số tiền, kể cả khi bạn đổi giá ở đây.</p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="s-reset">Khôi phục mặc định</button>
+        <button type="button" class="btn" id="s-cancel">Đóng</button>
+        <button type="button" class="btn btn-primary" id="s-save">Lưu cài đặt</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="room-modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="room-modal-title">Phòng</h2>
+        <button type="button" class="icon-btn" id="rm-close" aria-label="Đóng">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="room-modal-body"></div>
+        <div class="form-grid">
+          <label>Đổi tên phòng
+            <div class="with-btn">
+              <input id="rm-new-name" type="text" placeholder="P121">
+              <button type="button" class="btn" id="rm-rename">Lưu tên</button>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="modal-foot wrap">
+        <button type="button" class="btn btn-primary" id="rm-checkin">Nhận khách</button>
+        <button type="button" class="btn" id="rm-edit">Sửa thông tin thuê</button>
+        <button type="button" class="btn btn-warn" id="rm-calc">Tính tiền trả phòng</button>
+        <button type="button" class="btn btn-pay" id="rm-pay">Thanh toán</button>
+        <button type="button" class="btn" id="rm-checkout">Trả phòng</button>
+        <button type="button" class="btn" id="rm-clean">Đánh dấu đang dọn</button>
+        <button type="button" class="btn btn-primary" id="rm-cleaned">Đã dọn xong</button>
+        <button type="button" class="btn" id="rm-inactive">Ngừng hoạt động</button>
+        <button type="button" class="btn btn-danger" id="rm-delete">Xóa phòng</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="checkout-modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="co-title">Tính tiền trả phòng</h2>
+        <button type="button" class="icon-btn" data-close="#checkout-modal">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">Chỉ tính và hiển thị. Phòng chưa được giải phóng cho đến khi bạn xác nhận thanh toán và trả phòng. Có thể sửa giờ trả trên form bên ngoài rồi bấm Tính tiền ngay.</p>
+        <div id="checkout-preview" class="result-box"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" id="co-close">Đóng (chưa trả phòng)</button>
+        <button type="button" class="btn btn-pay" id="co-confirm">Xác nhận thanh toán và trả phòng</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="invoice-modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head no-print">
+        <h2>Hóa đơn</h2>
+        <button type="button" class="icon-btn" id="inv-close">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="invoice-view"></div>
+      </div>
+      <div class="modal-foot no-print">
+        <button type="button" class="btn btn-primary" id="inv-print">In hóa đơn</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="confirm-modal" aria-hidden="true">
+    <div class="modal-card small">
+      <div class="modal-head"><h2 id="confirm-title">Xác nhận</h2></div>
+      <div class="modal-body"><p id="confirm-message"></p></div>
+      <div class="modal-foot">
+        <button type="button" class="btn" id="confirm-cancel">Hủy</button>
+        <button type="button" class="btn btn-primary" id="confirm-ok">Đồng ý</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="print-root" class="print-only"></div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/pricing.js"></script>
+  <script src="js/rooms.js"></script>
+  <script src="js/payments.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
